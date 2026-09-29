@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Core gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Public release boundary audit
+        run: node scripts/audit-public.mjs
+
+      - name: Public history audit
+        run: npm run audit:public-history
+
+      - name: Parser-backed comment language check
+        run: node scripts/remove-cjk-comments.mjs --check
+
+      - name: Validate centralized config schema
+        run: npm run config:check
+
+      - name: Dependency security audit
+        run: npm audit --registry=https://registry.npmjs.org --audit-level=critical
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Full tests
+        run: npm test
+
+      - name: Deploy button workflow tests
+        run: npm run test:deploy-button
+
+      - name: Build
+        run: npm run build
+
+      - name: D1 migration smoke test
+        run: npx --no-install wrangler d1 migrations apply DB --local --config .generated/wrangler.jsonc
+
+      - name: Wrangler deployment dry run
+        run: npx --no-install wrangler deploy --dry-run --config .generated/wrangler.jsonc
+
+      - name: Deploy button template dry run
+        run: npx --no-install wrangler deploy --dry-run --config wrangler.jsonc

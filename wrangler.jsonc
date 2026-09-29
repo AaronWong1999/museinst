@@ -1,0 +1,110 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "museinst",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/api/*",
+      "/bind/*",
+      "/r/*",
+      "/recipe/*",
+      "/telegram/*",
+      "/admin/*",
+      "/healthz"
+    ]
+  },
+  "ai": {
+    "binding": "AI"
+  },
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "museinst-db",
+      "database_id": "placeholder",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ARTIFACTS",
+      "bucket_name": "museinst-artifacts"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "placeholder"
+    }
+  ],
+  "triggers": {
+    "crons": [
+      "*/1 * * * *"
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "AGENT",
+        "class_name": "PersonalAgent"
+      },
+      {
+        "name": "BROWSER_WORKER",
+        "class_name": "BrowserWorker"
+      },
+      {
+        "name": "WECHAT_POLLER",
+        "class_name": "WeChatPoller"
+      },
+      {
+        "name": "TOKEN_BROKER",
+        "class_name": "TokenBroker"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "PersonalAgent",
+        "BrowserWorker",
+        "WeChatPoller"
+      ]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": [
+        "TokenBroker"
+      ]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "QUEUE_ENABLED": "0",
+    "TELEGRAM_ENABLED": "0",
+    "WECHAT_ENABLED": "1",
+    "MODEL_PROVIDER": "workers-ai",
+    "MODEL_ROOT": "@cf/google/gemma-4-26b-a4b-it",
+    "MODEL_WORKER": "@cf/google/gemma-4-26b-a4b-it",
+    "BROWSER_PERCEPTION": "hybrid",
+    "BROWSER_MAX_CONCURRENT": "0",
+    "PUBLIC_BASE_URL": "",
+    "SETUP_CLAIM_UNTIL": "",
+    "GOOGLE_OAUTH_SCOPE_PROFILE": "self_hosted_full",
+    "AGENT_EMAIL_ENABLED": "0",
+    "EMAIL_DOMAIN": "",
+    "AGENT_EMAIL_OUTBOUND_ENABLED": "0",
+    "STRANGER_AUTOREPLY_GLOBAL": "0"
+  }
+}

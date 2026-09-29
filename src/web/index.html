@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MuseInst — 在你的聊天软件里替你办事的个人 Agent</title>
+    <meta name="description" content="MuseInst：开源、Cloudflare 原生的个人 Agent。微信 / Telegram / Agent 邮箱 / 云浏览器。" />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23171717'/%3E%3Ctext x='16' y='23' font-family='Georgia,serif' font-size='20' fill='white' text-anchor='middle'%3Eo%3C/text%3E%3C/svg%3E" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      // 外观模式：Settings 页选择，localStorage 缓存，首屏前生效防闪白
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches)) {
+            document.documentElement.dataset.theme = "dark";
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

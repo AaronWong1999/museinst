@@ -1,0 +1,2 @@
+# Optional. Without ADMIN_KEY, the first visit after deployment claims the agent in the browser.
+# ADMIN_KEY=

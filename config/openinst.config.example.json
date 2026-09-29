@@ -1,0 +1,66 @@
+{
+  "deployment": {
+    "slug": "openinst",
+    "baseUrl": "https://your-openinst.example.com",
+    "compatibilityDate": "2026-09-01"
+  },
+  "model": {
+    "provider": "workers-ai",
+    "root": "@cf/google/gemma-4-26b-a4b-it",
+    "worker": "@cf/google/gemma-4-26b-a4b-it",
+    "baseUrl": "",
+    "apiKey": "",
+    "maxContext": null
+  },
+  "browser": {
+    "perception": "hybrid",
+    "maxConcurrent": 0,
+    "liveView": {
+      "accountId": "",
+      "apiToken": ""
+    }
+  },
+  "runtime": {
+    "queuesEnabled": true
+  },
+  "channels": {
+    "telegram": {
+      "enabled": false,
+      "botToken": "",
+      "webhookSecret": ""
+    },
+    "wechat": {
+      "enabled": true
+    }
+  },
+  "connectors": {
+    "google": {
+      "clientId": "",
+      "clientSecret": ""
+    },
+    "feishu": {
+      "appId": "",
+      "appSecret": ""
+    },
+    "lark": {
+      "appId": "",
+      "appSecret": ""
+    },
+    "github": {
+      "clientId": "",
+      "clientSecret": ""
+    }
+  },
+  "agentEmail": {
+    "enabled": false,
+    "domain": "mail.your-domain.example",
+    "outboundEnabled": false,
+    "strangerAutoreply": false
+  },
+  "secrets": {
+    "openinstSecret": "",
+    "vaultMasterKey": "",
+    "wechatTokenKey": "",
+    "adminKey": ""
+  }
+}

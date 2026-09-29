@@ -1,0 +1,173 @@
+{
+  "name": "openinst",
+  "version": "0.1.0",
+  "private": true,
+  "description": "VM-less personal agent on Cloudflare: personal agents at 1/1000 the cost.",
+  "license": "Apache-2.0",
+  "cloudflare": {
+    "bindings": {
+      "ADMIN_KEY": {
+        "description": "Optional. Leave it empty and claim your agent in the browser after the deploy. If you set it, use a random password of at least 24 characters; it becomes the owner password. Encryption keys are generated automatically."
+      }
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "config:init": "node scripts/init-config.mjs",
+    "config:generate": "node scripts/configure.mjs",
+    "config:check": "node scripts/configure.mjs --example",
+    "audit:public": "node scripts/audit-public.mjs",
+    "test:deploy-button": "node --test tests/deploy-button.test.mjs",
+    "audit:public-history": "node scripts/audit-public-history.mjs",
+    "audit:deps": "npm audit --registry=https://registry.npmjs.org --audit-level=critical",
+    "check:comments": "node scripts/remove-cjk-comments.mjs --check",
+    "verify": "npm run config:check && npm run audit:public && npm run check:comments && npm run typecheck && npm test && npm run test:deploy-button && npm run build",
+    "dry-run": "node scripts/configure.mjs --example && npx --no-install wrangler deploy --dry-run --config .generated/wrangler.jsonc",
+    "test": "tsx tests/run-all.ts",
+    "deploy": "node scripts/deploy-entry.mjs",
+    "deploy:button": "node scripts/deploy-button.mjs",
+    "preflight": "tsx scripts/preflight.ts",
+    "db:migrate": "node scripts/configure.mjs && npx --no-install wrangler d1 migrations apply DB --remote --config .generated/wrangler.jsonc",
+    "db:migrate:local": "node scripts/configure.mjs && npx --no-install wrangler d1 migrations apply DB --local --config .generated/wrangler.jsonc",
+    "bench:browser": "tsx scripts/bench-browser.ts",
+    "burn-in:ilink": "tsx scripts/burn-in-ilink.ts"
+  },
+  "dependencies": {
+    "@cloudflare/puppeteer": "^1.4.0",
+    "agents": "^0.0.60",
+    "hono": "^4.6.14",
+    "postal-mime": "^3.0.0",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@babel/parser": "^7.29.9",
+    "@cloudflare/workers-types": "^5.20260903.1",
+    "@tailwindcss/vite": "^4.1.13",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.1.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.7",
+    "wrangler": "^4.40.0"
+  },
+  "main": "src/worker.ts",
+  "types": "./src/worker.ts",
+  "exports": {
+    ".": {
+      "types": "./src/worker.ts",
+      "import": "./src/worker.ts"
+    },
+    "./core": {
+      "types": "./src/core/index.ts",
+      "import": "./src/core/index.ts"
+    },
+    "./contracts": {
+      "types": "./src/contracts/index.ts",
+      "import": "./src/contracts/index.ts"
+    },
+    "./hooks": {
+      "types": "./src/hooks.ts",
+      "import": "./src/hooks.ts"
+    },
+    "./identity": {
+      "types": "./src/identity.ts",
+      "import": "./src/identity.ts"
+    },
+    "./model/call": {
+      "types": "./src/model/call.ts",
+      "import": "./src/model/call.ts"
+    },
+    "./session": {
+      "types": "./src/session.ts",
+      "import": "./src/session.ts"
+    },
+    "./crypto": {
+      "types": "./src/crypto.ts",
+      "import": "./src/crypto.ts"
+    },
+    "./wechat": {
+      "types": "./src/channels/wechat/ilink.ts",
+      "import": "./src/channels/wechat/ilink.ts"
+    },
+    "./copy": {
+      "types": "./src/copy.ts",
+      "import": "./src/copy.ts"
+    },
+    "./vault": {
+      "types": "./src/vault/service.ts",
+      "import": "./src/vault/service.ts"
+    },
+    "./imap/executor": {
+      "types": "./src/imap/executor.ts",
+      "import": "./src/imap/executor.ts"
+    },
+    "./channels/email/outbox": {
+      "types": "./src/channels/email/outbox.ts",
+      "import": "./src/channels/email/outbox.ts"
+    },
+    "./channels/email/ingress": {
+      "types": "./src/channels/email/reliable-ingress.ts",
+      "import": "./src/channels/email/reliable-ingress.ts"
+    },
+    "./channels/email/mailbox": {
+      "types": "./src/channels/email/mailbox.ts",
+      "import": "./src/channels/email/mailbox.ts"
+    },
+    "./channels/email/trust-control": {
+      "types": "./src/channels/email/trust-control/index.ts",
+      "import": "./src/channels/email/trust-control/index.ts"
+    },
+    "./channels/email/trust-service": {
+      "types": "./src/channels/email/trust-service.ts",
+      "import": "./src/channels/email/trust-service.ts"
+    },
+    "./channels/email/a2a/initiate": {
+      "types": "./src/channels/email/a2a/initiate.ts",
+      "import": "./src/channels/email/a2a/initiate.ts"
+    },
+    "./env": {
+      "types": "./src/env.ts",
+      "import": "./src/env.ts"
+    },
+    "./channels/outbound": {
+      "types": "./src/channels/outbound.ts",
+      "import": "./src/channels/outbound.ts"
+    },
+    "./channels/email/admission": {
+      "types": "./src/channels/email/admission.ts",
+      "import": "./src/channels/email/admission.ts"
+    },
+    "./channels/email/dispatch-queue": {
+      "types": "./src/channels/email/dispatch-queue.ts",
+      "import": "./src/channels/email/dispatch-queue.ts"
+    },
+    "./channels/email/identity": {
+      "types": "./src/channels/email/identity.ts",
+      "import": "./src/channels/email/identity.ts"
+    },
+    "./channels/email/notifications": {
+      "types": "./src/channels/email/notifications.ts",
+      "import": "./src/channels/email/notifications.ts"
+    },
+    "./channels/email/drive": {
+      "types": "./src/channels/email/drive.ts",
+      "import": "./src/channels/email/drive.ts"
+    }
+  },
+  "homepage": "https://museinst.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AaronWong1999/museinst.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AaronWong1999/museinst/issues"
+  }
+}
