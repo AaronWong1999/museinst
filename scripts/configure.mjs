@@ -134,7 +134,7 @@ const wrangler = {
     directory: "../dist/client",
     binding: "ASSETS",
     not_found_handling: "single-page-application",
-    run_worker_first: ["/api/*", "/bind/*", "/r/*", "/recipe/*", "/telegram/*", "/admin/*", "/healthz"],
+    run_worker_first: ["/api/*", "/b/*", "/browser/*", "/bind/*", "/r/*", "/recipe/*", "/telegram/*", "/admin/*", "/healthz"],
   },
   ai: { binding: "AI" },
   browser: { binding: "BROWSER" },
