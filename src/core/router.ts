@@ -141,6 +141,7 @@ for (const path of [
   "/api/connectors",
   "/api/connectors/*",
   "/api/privacy/*",
+  "/api/receipts/*",
   "/api/recipes",
   "/api/recipe/*",
   "/api/chat",
@@ -705,8 +706,9 @@ coreApiApp.delete("/api/me", async (c) => {
   const context = { workspaceId: session.workspaceId, userId: session.userId };
   try {
     await hooks.beforeAccountDelete?.(c.env, context);
-    const { wipeWorkspaceArtifacts, wipeWorkspaceStatements } = await import("../wipe");
+    const { wipeWorkspaceArtifacts, wipeWorkspaceDurableState, wipeWorkspaceStatements } = await import("../wipe");
     await wipeWorkspaceArtifacts(c.env, session.workspaceId);
+    await wipeWorkspaceDurableState(c.env, session.workspaceId);
 
     const { agentFetch } = await import("../agent/rpc");
     const agentResponse = await agentFetch(c.env.AGENT, session.workspaceId, "/wipe", { method: "POST" });
@@ -722,6 +724,18 @@ coreApiApp.delete("/api/me", async (c) => {
     status: 204,
     headers: { "set-cookie": clearSessionHeader() },
   });
+});
+
+coreApiApp.post("/api/receipts/:slug/visibility", async (c) => {
+  const session = c.get("session") as SessionInfo;
+  const body = await readJson<{ public?: boolean }>(c.req.raw);
+  const slug = c.req.param("slug");
+  const result = await c.env.DB.prepare(
+    `UPDATE task_receipts SET public=? WHERE share_slug=? AND task_id IN (SELECT id FROM tasks WHERE workspace_id=?)`,
+  ).bind(body.public ? 1 : 0, slug, session.workspaceId).run();
+  if ((result.meta?.changes ?? 0) !== 1) return json({ error: "not_found" }, 404);
+  if (!body.public) await c.env.ARTIFACTS.delete(`receipts/${slug}.jpg`).catch(() => {});
+  return json({ ok: true, public: Boolean(body.public) });
 });
 
 coreApiApp.get("/api/vault/items", async (c) => {
@@ -804,7 +818,7 @@ coreApiApp.get("/api/tasks/:id", async (c) => {
       `SELECT type, value FROM task_evidence WHERE task_id=?`,
     ).bind((task as any).id).all(),
     c.env.DB.prepare(
-      `SELECT share_slug FROM task_receipts WHERE task_id=?`,
+      `SELECT share_slug, public FROM task_receipts WHERE task_id=?`,
     ).bind((task as any).id).first(),
   ]);
   // Typed waiting state (spec §11.2/§25.3): surface the agent's own pending
@@ -913,6 +927,12 @@ coreApiApp.post("/api/privacy/delete", async (c) => {
   }
   if (body.mode === "disconnect_and_delete") {
     const ws = session.workspaceId;
+    const slugs = await c.env.DB.prepare(
+      `SELECT tr.share_slug FROM task_receipts tr JOIN tasks t ON t.id=tr.task_id WHERE t.workspace_id=? AND tr.share_slug IS NOT NULL`,
+    ).bind(ws).all<{ share_slug: string }>();
+    for (const row of slugs.results ?? []) {
+      if (row.share_slug) await c.env.ARTIFACTS.delete(`receipts/${row.share_slug}.jpg`);
+    }
     await c.env.DB.batch([
       c.env.DB.prepare(`DELETE FROM connections WHERE workspace_id=?`).bind(ws),
       c.env.DB.prepare(`DELETE FROM vault_items WHERE workspace_id=?`).bind(ws),

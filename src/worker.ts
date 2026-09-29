@@ -7,7 +7,8 @@ import {
   sessionCookieHeader,
   consumeLoginNonceAndCreateSession,
 } from "./session";
-import { ensureOwnerWorkspace } from "./identity";
+import { ensureOwnerWorkspace, SELF_HOST_OWNER_USER_ID, SELF_HOST_OWNER_WORKSPACE_ID } from "./identity";
+import { timingSafeEqual } from "./channels/telegram";
 import { createBindCode } from "./channels/dispatch";
 import { consumeInboundEnvelope } from "./channels/inbox";
 import { handleTelegramWebhook, setupTelegramBot, getWebhookInfo } from "./channels/telegram";
@@ -51,12 +52,53 @@ function keylessClaimOpen(env: Env): boolean {
 }
 
 async function isRecoveryKey(env: Env, req: Request): Promise<boolean> {
+  // Setting ADMIN_KEY supersedes the browser-claim recovery key, so an owner can
+  // revoke a recovery key by configuring a password.
+  if (env.ADMIN_KEY) return false;
   const supplied = req.headers.get("x-admin-key") ?? "";
   if (supplied.length < 32) return false;
   const row = await env.DB.prepare(
     `SELECT value FROM settings WHERE workspace_id='__global' AND key=?`,
   ).bind(RECOVERY_KEY_SETTING).first<{ value: string }>();
-  return !!row?.value && row.value === await sha256hex(supplied);
+  return !!row?.value && timingSafeEqual(row.value, await sha256hex(supplied));
+}
+
+const CLAIM_SETTING = "owner_claimed_at";
+
+// Claims one keyless instance in a single transaction: the claim marker, the
+// recovery key hash, the owner user and the workspace are written together, so
+// a failure never leaves a marker without an owner. Returns null when another
+// request already claimed it.
+async function claimOwner(env: Env, recoveryKeyHash: string): Promise<{ userId: string; workspaceId: string } | null> {
+  // A marker without any workspace can only be left behind by an older,
+  // non-transactional claim or by deleting the last workspace; clear it.
+  await env.DB.prepare(
+    `DELETE FROM settings WHERE workspace_id='__global' AND key IN (?, ?)
+       AND NOT EXISTS (SELECT 1 FROM workspaces)`,
+  ).bind(CLAIM_SETTING, RECOVERY_KEY_SETTING).run();
+
+  const token = `${now()}:${newId("claim")}`;
+  const t = now();
+  const mine = `(SELECT value FROM settings WHERE workspace_id='__global' AND key='${CLAIM_SETTING}') = ?`;
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO settings (workspace_id, key, value)
+       SELECT '__global', ?, ? WHERE NOT EXISTS (SELECT 1 FROM workspaces)`,
+    ).bind(CLAIM_SETTING, token),
+    env.DB.prepare(
+      `INSERT OR REPLACE INTO settings (workspace_id, key, value) SELECT '__global', ?, ? WHERE ${mine}`,
+    ).bind(RECOVERY_KEY_SETTING, recoveryKeyHash, token),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO users (id, created_at, display_name, is_admin) SELECT ?, ?, 'Owner', 1 WHERE ${mine}`,
+    ).bind(SELF_HOST_OWNER_USER_ID, t, token),
+    env.DB.prepare(
+      `INSERT OR IGNORE INTO workspaces (id, owner_user_id, created_at) SELECT ?, ?, ? WHERE ${mine}`,
+    ).bind(SELF_HOST_OWNER_WORKSPACE_ID, SELF_HOST_OWNER_USER_ID, t, token),
+  ]);
+  const won = await env.DB.prepare(
+    `SELECT w.id FROM workspaces w WHERE w.id=? AND ${mine}`,
+  ).bind(SELF_HOST_OWNER_WORKSPACE_ID, token).first<{ id: string }>();
+  return won ? { userId: SELF_HOST_OWNER_USER_ID, workspaceId: SELF_HOST_OWNER_WORKSPACE_ID } : null;
 }
 
 async function firstWorkspaceId(env: Env): Promise<string | null> {
@@ -89,24 +131,35 @@ app.get("/api/setup/status", async (c) => {
 });
 
 app.post("/api/setup", async (c) => {
-  let recoveryKey: string | undefined;
-  if (!isAdmin(c.req.raw, c.env) && !(await isRecoveryKey(c.env, c.req.raw))) {
-    if (!keylessClaimOpen(c.env) || await firstWorkspaceId(c.env)) return json({ error: "unauthorized" }, 401);
-    const claim = await c.env.DB.prepare(
-      `INSERT OR IGNORE INTO settings (workspace_id, key, value) VALUES ('__global', 'owner_claimed_at', ?)`,
-    ).bind(String(now())).run();
-    if ((claim.meta?.changes ?? 0) !== 1) return json({ error: "already_claimed" }, 409);
-    const bytes = crypto.getRandomValues(new Uint8Array(24));
-    recoveryKey = "mi_" + [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
-    await c.env.DB.prepare(
-      `INSERT INTO settings (workspace_id, key, value) VALUES ('__global', ?, ?)
-       ON CONFLICT(workspace_id, key) DO UPDATE SET value=excluded.value`,
-    ).bind(RECOVERY_KEY_SETTING, await sha256hex(recoveryKey)).run();
+  if (isAdmin(c.req.raw, c.env) || await isRecoveryKey(c.env, c.req.raw)) {
+    const owner = await ensureOwnerWorkspace(c.env);
+    const session = await createSession(c.env, owner.userId, owner.workspaceId);
+    return json(
+      { ok: true, created: owner.created, workspaceId: owner.workspaceId },
+      200,
+      { "set-cookie": sessionCookieHeader(session.cookie) },
+    );
   }
-  const owner = await ensureOwnerWorkspace(c.env);
-  const session = await createSession(c.env, owner.userId, owner.workspaceId);
+  if (!keylessClaimOpen(c.env) || await firstWorkspaceId(c.env)) return json({ error: "unauthorized" }, 401);
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  const recoveryKey = "mi_" + [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+  const owner = await claimOwner(c.env, await sha256hex(recoveryKey));
+  if (!owner) return json({ error: "already_claimed" }, 409);
+  let session: { cookie: string };
+  try {
+    session = await createSession(c.env, owner.userId, owner.workspaceId);
+  } catch (e) {
+    // The browser never received the recovery key, so release the claim and let
+    // the same visitor try again instead of leaving an owner nobody can reach.
+    await c.env.DB.batch([
+      c.env.DB.prepare(`DELETE FROM workspaces WHERE id=?`).bind(owner.workspaceId),
+      c.env.DB.prepare(`DELETE FROM users WHERE id=?`).bind(owner.userId),
+      c.env.DB.prepare(`DELETE FROM settings WHERE workspace_id='__global' AND key IN (?, ?)`).bind(CLAIM_SETTING, RECOVERY_KEY_SETTING),
+    ]).catch(() => {});
+    throw e;
+  }
   return json(
-    { ok: true, created: owner.created, workspaceId: owner.workspaceId, recoveryKey },
+    { ok: true, created: true, workspaceId: owner.workspaceId, recoveryKey },
     200,
     { "set-cookie": sessionCookieHeader(session.cookie) },
   );

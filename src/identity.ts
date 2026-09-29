@@ -187,8 +187,8 @@ export async function resolveIdentity(
   };
 }
 
-const SELF_HOST_OWNER_USER_ID = "u_self_host_owner";
-const SELF_HOST_OWNER_WORKSPACE_ID = "w_self_host_owner";
+export const SELF_HOST_OWNER_USER_ID = "u_self_host_owner";
+export const SELF_HOST_OWNER_WORKSPACE_ID = "w_self_host_owner";
 
 /**
  * Returns the single self-hosted owner workspace. The deterministic bootstrap identifiers make

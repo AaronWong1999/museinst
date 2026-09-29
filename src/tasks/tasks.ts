@@ -119,7 +119,7 @@ export async function createReceipt(env: Env, taskId: string): Promise<string | 
   const slug = newSlug(6);
   const receiptId = newId("r");
   const data: ReceiptData = {
-    title: task.title ?? task.class,
+    title: redact(task.title ?? task.class),
     steps: (steps.results ?? []).map((s) => redact(s.desc)),
     evidence: (evidence.results ?? []).map((e) => ({ type: e.type, value: redact(e.value) })),
     durationMs: (task.completed_at ?? now()) - task.started_at,
@@ -127,22 +127,27 @@ export async function createReceipt(env: Env, taskId: string): Promise<string | 
     taskClass: task.class,
   };
   await env.DB.prepare(
-    `INSERT INTO task_receipts (id, task_id, share_slug, redacted_json, public, created_at) VALUES (?, ?, ?, ?, 1, ?)`,
+    `INSERT INTO task_receipts (id, task_id, share_slug, redacted_json, public, created_at) VALUES (?, ?, ?, ?, 0, ?)`,
   )
     .bind(receiptId, taskId, slug, JSON.stringify(data), now())
     .run();
   return slug;
 }
 
-export async function getReceiptBySlug(env: Env, slug: string): Promise<ReceiptData | null> {
+/**
+ * Receipts are private by default. A receipt is visible to anyone only after its
+ * owner marks it public; otherwise only a session from the owning workspace can
+ * read it.
+ */
+export async function getReceiptBySlug(env: Env, slug: string, viewerWorkspaceId?: string | null): Promise<ReceiptData | null> {
   const row = await env.DB.prepare(
-    `SELECT redacted_json FROM task_receipts WHERE share_slug=? AND public=1`,
+    `SELECT tr.redacted_json FROM task_receipts tr JOIN tasks t ON t.id=tr.task_id
+      WHERE tr.share_slug=? AND (tr.public=1 OR t.workspace_id=?)`,
   )
-    .bind(slug)
+    .bind(slug, viewerWorkspaceId ?? "")
     .first<{ redacted_json: string }>();
   return row ? (JSON.parse(row.redacted_json) as ReceiptData) : null;
 }
-
 
 export function redact(s: string): string {
   return s

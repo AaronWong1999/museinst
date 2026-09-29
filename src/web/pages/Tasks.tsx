@@ -95,10 +95,24 @@ function TaskDetail({ id, nav }: { id: string; nav: (to: string) => void }): Rea
       </div>
 
       {receipt && (
-        <a href={`/r/${receipt.share_slug}`} className="mt-5 block border border-[#E5E5E5] rounded-xl p-4 hover:bg-[#FAFAFA]">
-          <div className="text-[14px] font-medium">🗂 脱敏任务凭证</div>
-          <div className="text-[13px] text-[#737373] mt-1">/r/{receipt.share_slug} —— 可分享的完成证明</div>
-        </a>
+        <div className="mt-5 border border-[#E5E5E5] rounded-xl p-4 flex items-center justify-between gap-4">
+          <a href={`/r/${receipt.share_slug}`} className="min-w-0 hover:opacity-80">
+            <div className="text-[14px] font-medium">🗂 脱敏任务凭证</div>
+            <div className="text-[13px] text-[#737373] mt-1">
+              /r/{receipt.share_slug} —— {receipt.public ? "已公开，拿到链接的人都能看" : "私密，只有你能看"}
+            </div>
+          </a>
+          <button
+            onClick={async () => {
+              const next = !receipt.public;
+              await api(`/api/receipts/${receipt.share_slug}/visibility`, { method: "POST", body: JSON.stringify({ public: next }) });
+              setData({ ...data, receipt: { ...receipt, public: next ? 1 : 0 } });
+            }}
+            className="shrink-0 text-[13px] border border-[#E5E5E5] rounded-lg px-3 py-1.5 hover:bg-[#FAFAFA]"
+          >
+            {receipt.public ? "设为私密" : "设为公开"}
+          </button>
+        </div>
       )}
 
       <div className="mt-8">

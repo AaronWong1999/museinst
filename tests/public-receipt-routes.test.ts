@@ -17,7 +17,7 @@ const env: any = {
       return {
         bind(...args: unknown[]) {
           return {
-            first: async () => sql.includes("SELECT redacted_json") && args[0] === "known"
+            first: async () => sql.includes("redacted_json") && args[0] === "known"
               ? { redacted_json: JSON.stringify(receipt) }
               : null,
           };

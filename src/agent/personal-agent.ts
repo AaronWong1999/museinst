@@ -75,10 +75,10 @@ import {
   type ExternalOutcomeRecord,
 } from "./external-completion-guard";
 import { clampText, newId, newSlug, now, todayDay } from "../util";
-import { addEvidence, addStep, completeTask, createReceipt, startTask } from "../tasks/tasks";
+import { addEvidence, addStep, completeTask, createReceipt, redact, startTask } from "../tasks/tasks";
 import { listItems } from "../vault/service";
 import { getWorkspaceOwner } from "../identity";
-import { getHostHooks, type UsageRecord, type UsageContext } from "../hooks";
+import { runBeforeTaskGate, getHostHooks, type UsageRecord, type UsageContext } from "../hooks";
 import {
   OWNER_GLOBAL_SCOPE,
   deriveSecurityContext,
@@ -1389,8 +1389,16 @@ export class PersonalAgent extends Agent<Env, AgentState> {
     }
 
     if (url.pathname === "/wipe" && req.method === "POST") {
-      for (const t of ["messages", "memory", "channel_cursor", "idempotency", "schedules_cache", "schedules", "pending_tasks", "workstreams"]) {
-        this.ctx.storage.sql.exec(`DELETE FROM ${t}`);
+      for (const t of [
+        "messages", "memory", "channel_cursor", "idempotency", "schedules_cache", "schedules", "pending_tasks", "workstreams",
+        "conversation_threads", "conversation_messages", "conversation_followups", "conversation_events", "automation_runs",
+      ]) {
+        // Tables are created lazily; a table that was never created has nothing to wipe.
+        try {
+          this.ctx.storage.sql.exec(`DELETE FROM ${t}`);
+        } catch (e) {
+          if (!/no such table/i.test(String(e))) throw e;
+        }
       }
       for (const alarm of await this.getSchedules()) {
         await this.cancelSchedule(alarm.id).catch(() => {});
@@ -1985,17 +1993,17 @@ export class PersonalAgent extends Agent<Env, AgentState> {
     // Answer-only (or receipt-creation fell through): synthesize a summary
     // receipt row so task detail explains what happened (DEFECT-010).
     const summary = {
-      title: task.title ?? task.class,
+      title: redact(task.title ?? task.class),
       steps: [] as string[],
       evidence: [] as Array<{ type: string; value: string }>,
       durationMs: now() - task.started_at,
       channel: task.channel,
       taskClass: task.class,
-      answerPreview: answer.slice(0, 500),
+      answerPreview: redact(answer.slice(0, 500)),
       summaryOnly: true,
     };
     await this.env.DB.prepare(
-      `INSERT OR IGNORE INTO task_receipts (id, task_id, share_slug, redacted_json, public, created_at) VALUES (?, ?, ?, ?, 1, ?)`,
+      `INSERT OR IGNORE INTO task_receipts (id, task_id, share_slug, redacted_json, public, created_at) VALUES (?, ?, ?, ?, 0, ?)`,
     )
       .bind(newId("r"), outcome.taskId, newSlug(6), JSON.stringify(summary), now())
       .run();
@@ -2052,12 +2060,7 @@ export class PersonalAgent extends Agent<Env, AgentState> {
 
 
     const gate = isOwnerTurn
-      ? await getHostHooks()
-          .beforeTask?.(this.env, { workspaceId, userId, channel: event.channel, taskClass: "turn", lang })
-          .catch((e) => {
-            console.error("[agent] beforeTask failed", String(e));
-            return { allow: true } as { allow: boolean; reason?: string };
-          })
+      ? await runBeforeTaskGate(this.env, { workspaceId, userId, channel: event.channel, taskClass: "turn", lang })
       : null;
     if (gate && !gate.allow) {
       const reply = gate.reason ?? (lang === "zh" ? "本轮被宿主策略拦截。" : "Blocked by host policy.");
@@ -2814,7 +2817,7 @@ export class PersonalAgent extends Agent<Env, AgentState> {
       const summary = formatBrowserResult(out.result, ctx.lang);
       return {
         parked: false,
-        content: summary + (slug ? (ctx.lang === "zh" ? `\n\n凭证：${this.env.PUBLIC_BASE_URL}/r/${slug}（可分享）` : `\n\nReceipt: ${this.env.PUBLIC_BASE_URL}/r/${slug} (shareable)`) : ""),
+        content: summary + (slug ? (ctx.lang === "zh" ? `\n\n凭证：${this.env.PUBLIC_BASE_URL}/r/${slug}（仅你可见，可在任务页设为公开）` : `\n\nReceipt: ${this.env.PUBLIC_BASE_URL}/r/${slug} (private; you can make it public on the task page)`) : ""),
         externalRecord: {
           tool: "browser_task",
           provider: "browser",
@@ -3400,7 +3403,7 @@ export class PersonalAgent extends Agent<Env, AgentState> {
         this.resolvePendingTasksForTask(parked.taskId, "resolved");
         for (const ev of out.evidence ?? []) addEvidence(this.env, parked.taskId, ev.type, ev.value);
         const slug = await createReceipt(this.env, parked.taskId).catch(() => null);
-        const msg = formatBrowserResult(out.result, lang) + (slug ? (lang === "zh" ? `\n\n凭证：${this.env.PUBLIC_BASE_URL}/r/${slug}（可分享）` : `\n\nReceipt: ${this.env.PUBLIC_BASE_URL}/r/${slug} (shareable)`) : "");
+        const msg = formatBrowserResult(out.result, lang) + (slug ? (lang === "zh" ? `\n\n凭证：${this.env.PUBLIC_BASE_URL}/r/${slug}（仅你可见，可在任务页设为公开）` : `\n\nReceipt: ${this.env.PUBLIC_BASE_URL}/r/${slug} (private; you can make it public on the task page)`) : "");
         this.sql`INSERT OR IGNORE INTO messages (id, role, content_json, channel, scope_key, created_at) VALUES (${this.turnReplyHistoryId()}, 'assistant', ${storedMessage(msg, "model")}, ${event.channel}, ${scopeKey}, ${now()})`;
         await this.flushTurnUsage(parked.taskId);
         return [msg];
@@ -3596,7 +3599,7 @@ export class PersonalAgent extends Agent<Env, AgentState> {
       if (out.status === "done") {
         for (const ev of out.evidence ?? []) addEvidence(this.env, parked.taskId, ev.type, ev.value);
         const slug = await createReceipt(this.env, parked.taskId).catch(() => null);
-        const msg = formatBrowserResult(out.result, lang) + (slug ? (lang === "zh" ? `\n\n凭证：${this.env.PUBLIC_BASE_URL}/r/${slug}（可分享）` : `\n\nReceipt: ${this.env.PUBLIC_BASE_URL}/r/${slug} (shareable)`) : "");
+        const msg = formatBrowserResult(out.result, lang) + (slug ? (lang === "zh" ? `\n\n凭证：${this.env.PUBLIC_BASE_URL}/r/${slug}（仅你可见，可在任务页设为公开）` : `\n\nReceipt: ${this.env.PUBLIC_BASE_URL}/r/${slug} (private; you can make it public on the task page)`) : "");
         this.sql`INSERT OR IGNORE INTO messages (id, role, content_json, channel, scope_key, created_at) VALUES (${this.turnReplyHistoryId()}, 'assistant', ${storedMessage(msg, "model")}, ${event.channel}, ${scopeKey}, ${now()})`;
         await completeTask(this.env, parked.taskId, "verified_success").catch(() => {});
         await this.flushTurnUsage(parked.taskId);

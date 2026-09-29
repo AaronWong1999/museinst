@@ -66,11 +66,12 @@ export async function renderReceiptPng(
   opts: ReceiptImageOpts,
 ): Promise<{ bytes: Uint8Array; cached: boolean } | { error: string }> {
   const key = `receipts/${slug}.jpg`;
-  const cached = await env.ARTIFACTS.get(key);
-  if (cached) return { bytes: new Uint8Array(await cached.arrayBuffer()), cached: true };
-
+  // The share image is public, so it is only served for a receipt that still
+  // exists and is public; a cached image never outlives its receipt.
   const data = await getReceiptBySlug(env, slug);
   if (!data) return { error: "not_found" };
+  const cached = await env.ARTIFACTS.get(key);
+  if (cached) return { bytes: new Uint8Array(await cached.arrayBuffer()), cached: true };
 
   const html = buildReceiptHtml(data, slug, opts);
   const height = Math.min(Math.max(320 + data.steps.length * 64 + data.evidence.length * 90, 500), 2000);

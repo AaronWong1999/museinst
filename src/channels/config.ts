@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "./telegram";
 import type { Env } from "../env";
 import { decryptField, encryptField } from "../crypto";
 
@@ -94,5 +95,5 @@ export async function wechatConfigured(env: Env): Promise<boolean> {
 }
 
 export function isAdmin(req: Request, env: Env): boolean {
-  return !!env.ADMIN_KEY && req.headers.get("x-admin-key") === env.ADMIN_KEY;
+  return !!env.ADMIN_KEY && timingSafeEqual(req.headers.get("x-admin-key") ?? "", env.ADMIN_KEY);
 }

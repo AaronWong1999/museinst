@@ -16,7 +16,7 @@
 
 <br>
 
-MuseInst is personal agent infra that runs VM-less personal agents on Cloudflare.<br>
+MuseInst is **open-source** personal agent infra that runs VM-less personal agents on Cloudflare.<br>
 No cloud computer per user, about $0.02 a month, 1/1000 of a dedicated VM, 1/100 of a shared one.<br>
 Agent Mail, WeChat, Telegram, a cloud browser and long-term memory, all included.
 
@@ -51,7 +51,7 @@ We built it over a few days, so it is early. It already runs in production at [m
 | **Connectors** | Google Workspace, GitHub, Feishu / Lark and any IMAP/SMTP mailbox. |
 | **Web** | Search and page fetch without an API key. |
 | **Model** | Workers AI out of the box, or any OpenAI-compatible endpoint. |
-| **Receipts** | Every finished task can produce a shareable receipt. |
+| **Receipts** | Every finished task gets a receipt, private until you choose to share it. |
 
 ## Cost
 
@@ -79,7 +79,7 @@ These figures are estimates, not a quote. How we get them:
 1. Click **Deploy to Cloudflare** and sign in. Keep the defaults: Cloudflare creates the Worker, database and storage, and there is nothing to fill in.
 2. Open your Worker URL and press **Claim my agent**. It is yours, and you are already talking to it.
 
-The model runs on Workers AI in the same account, so there is no API key. Encryption keys are generated during the deploy and never leave Cloudflare. Claim within an hour of deploying; after that, redeploy to reopen the window, or set `ADMIN_KEY` as a Worker secret to use a password instead.
+The model runs on Workers AI in the same account, so there is no API key. Encryption keys are generated during the deploy and never leave Cloudflare. Claim within an hour of deploying; after that, redeploy to reopen the window, or set `ADMIN_KEY` as a Worker secret to use a password instead. Setting `ADMIN_KEY` also revokes the recovery key from the browser claim.
 
 ### Does it run on the free plan?
 

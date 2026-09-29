@@ -14,7 +14,7 @@
 
 <br>
 
-MuseInst 是一套 Personal Agent 基础设施，在 Cloudflare 上运行无 VM 的 Personal Agent。<br>
+MuseInst 是一套**开源**的 Personal Agent 基础设施，在 Cloudflare 上运行无 VM 的 Personal Agent。<br>
 不用给每个用户配云电脑，每人每月约 $0.02，是独享 VM 的 1/1000、共享 VM 的 1/100。<br>
 Agent 邮箱、微信、Telegram、云浏览器、长期记忆，一样不少。
 
@@ -49,7 +49,7 @@ MuseInst 给每个用户**一个持久的 Agent，而不是一台持久的机器
 | **连接器** | Google Workspace、GitHub、飞书 / Lark、任意 IMAP/SMTP 邮箱。 |
 | **网页** | 无需 API Key 的搜索与网页抓取。 |
 | **模型** | 默认 Workers AI，也可以接任意 OpenAI 兼容接口。 |
-| **任务凭证** | 完成的任务可以生成可分享的凭证。 |
+| **任务凭证** | 完成的任务会生成凭证，默认只有你能看，你决定公开后才可以分享。 |
 
 ## 成本
 
@@ -77,7 +77,7 @@ MuseInst 给每个用户**一个持久的 Agent，而不是一台持久的机器
 1. 点 **Deploy to Cloudflare** 并登录，保持默认设置即可。Worker、数据库和存储由 Cloudflare 自动创建，没有任何需要填写的东西。
 2. 打开 Worker 地址，点 **认领我的 Agent**。它就是你的了，直接开始对话。
 
-模型用同一账号下的 Workers AI，不需要 API Key。加密密钥在部署时自动生成，不离开 Cloudflare。部署后一小时内认领；过了时间重新部署一次即可，也可以在 Worker 里设置 `ADMIN_KEY`，改用密码进入。
+模型用同一账号下的 Workers AI，不需要 API Key。加密密钥在部署时自动生成，不离开 Cloudflare。部署后一小时内认领；过了时间重新部署一次即可，也可以在 Worker 里设置 `ADMIN_KEY`，改用密码进入。设置 `ADMIN_KEY` 后，浏览器认领时拿到的恢复密钥会同时作废。
 
 ### 免费计划够用吗？
 

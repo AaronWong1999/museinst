@@ -4,21 +4,29 @@ import { json } from "../util";
 import * as receiptImage from "./receipt-image";
 import { renderReceiptPng } from "./receipt-image";
 import * as tasksMod from "./tasks";
+import { readSession } from "../session";
+
+async function viewerWorkspace(c: any): Promise<string | null> {
+  const session = await readSession(c.env as Env, c.req.raw).catch(() => null);
+  return session?.workspaceId ?? null;
+}
 
 /** Mount the public receipt routes on Core and Hosted Worker entry points. */
 export function registerPublicReceiptRoutes(app: Hono<any>): void {
   app.get("/api/receipt/:slug", async (c: any) => {
-    const receipt = await tasksMod.getReceiptBySlug(c.env as Env, c.req.param("slug"));
+    const receipt = await tasksMod.getReceiptBySlug(c.env as Env, c.req.param("slug"), await viewerWorkspace(c));
     return receipt ? json(receipt) : json({ error: "not_found" }, 404);
   });
 
   app.get("/r/:slug", async (c: any) => {
     const slug = c.req.param("slug");
-    const receipt = await tasksMod.getReceiptBySlug(c.env as Env, slug);
+    const receipt = await tasksMod.getReceiptBySlug(c.env as Env, slug, await viewerWorkspace(c));
     if (!receipt) {
-      return c.html('<!doctype html><meta charset="utf-8"><title>404</title><body style="font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center"><div style="font-size:40px;font-family:Georgia,serif">404</div><div style="color:#737373;margin-top:8px">这个凭证不存在或已下架。</div><p><a href="/workspace" style="color:#171717">返回工作区</a></p></div></body>', 404);
+      return c.html('<!doctype html><meta charset="utf-8"><title>404</title><body style="font-family:system-ui;display:grid;place-items:center;height:100vh;margin:0"><div style="text-align:center"><div style="font-size:40px;font-family:Georgia,serif">404</div><div style="color:#737373;margin-top:8px">这个凭证不存在，或者是私密的。</div><p><a href="/workspace" style="color:#171717">返回工作区</a></p></div></body>', 404);
     }
-    return c.html(receiptImage.buildReceiptPageHtml(receipt, slug, c.env.PUBLIC_BASE_URL));
+    const res = c.html(receiptImage.buildReceiptPageHtml(receipt, slug, c.env.PUBLIC_BASE_URL));
+    res.headers.set("cache-control", "private, no-store");
+    return res;
   });
 
   app.get("/r/:slug/og.png", async (c: any) => {

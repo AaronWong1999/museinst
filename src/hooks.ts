@@ -239,3 +239,24 @@ export function resetHostHooks(): void {
 export function getHostHooks(): HostHooks {
   return current;
 }
+
+/**
+ * Runs the host's beforeTask policy for an owner turn. Fails closed: a hook that
+ * throws or rejects blocks the turn instead of granting a free model round.
+ */
+export async function runBeforeTaskGate(
+  env: Env,
+  ctx: TaskContext & { lang?: "zh" | "en" },
+): Promise<{ allow: boolean; reason?: string } | null> {
+  const hook = getHostHooks().beforeTask;
+  if (!hook) return null;
+  try {
+    return await hook(env, ctx);
+  } catch (e) {
+    console.error("[agent] beforeTask failed", String(e));
+    return {
+      allow: false,
+      reason: ctx.lang === "zh" ? "暂时无法处理，请稍后再发一次。" : "Something went wrong on our side. Please send that again in a moment.",
+    };
+  }
+}

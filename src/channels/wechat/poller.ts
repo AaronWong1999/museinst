@@ -77,6 +77,8 @@ export class WeChatPoller {
     if (url.pathname === "/unregister" && req.method === "POST") {
       await this.state.storage.delete("tokens");
       await this.state.storage.delete("botId");
+      const tickets = await this.state.storage.list({ prefix: "ticket:" });
+      if (tickets.size) await this.state.storage.delete([...tickets.keys()]);
       await this.state.storage.deleteAlarm();
       return Response.json({ ok: true, tokens: 0 });
     }

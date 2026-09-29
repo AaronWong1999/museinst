@@ -66,3 +66,49 @@ const post = (headers: Record<string, string> = {}) => ({
   assert.equal((await call(env, "/api/setup", post({ "x-admin-key": "k".repeat(32) }))).res.status, 200);
   console.log("  ✅ with ADMIN_KEY configured the claim window never opens");
 }
+
+{
+  // An orphan marker from an interrupted claim (no workspace behind it) must not
+  // lock the instance: status and POST agree, and the next claim succeeds.
+  const env = makeEnv({ SETUP_CLAIM_UNTIL: new Date(Date.now() + 60_000).toISOString() });
+  await env.DB.prepare(`INSERT INTO settings (workspace_id, key, value) VALUES ('__global', 'owner_claimed_at', '1')`).run();
+  await env.DB.prepare(`INSERT INTO settings (workspace_id, key, value) VALUES ('__global', 'owner_recovery_key_sha256', 'stale')`).run();
+  assert.equal((await call(env, "/api/setup/status")).body.claimable, true);
+  const claim = await call(env, "/api/setup", post());
+  assert.equal(claim.res.status, 200);
+  assert.match(claim.body.recoveryKey, /^mi_[0-9a-f]{48}$/);
+  console.log("  ✅ an orphan claim marker is cleared and the claim succeeds");
+}
+
+{
+  // A failure after the claim transaction releases the claim so the visitor can retry.
+  const env = makeEnv({ SETUP_CLAIM_UNTIL: new Date(Date.now() + 60_000).toISOString() });
+  const realPrepare = env.DB.prepare.bind(env.DB);
+  let failSessions = true;
+  env.DB.prepare = (sql: string) => {
+    if (failSessions && /INSERT INTO sessions/.test(sql)) throw new Error("d1: write failed");
+    return realPrepare(sql);
+  };
+  const first = await call(env, "/api/setup", post());
+  assert.equal(first.res.status, 500);
+  const ws = await realPrepare(`SELECT COUNT(*) AS n FROM workspaces`).first();
+  const marker = await realPrepare(`SELECT COUNT(*) AS n FROM settings WHERE workspace_id='__global'`).first();
+  assert.equal(ws.n, 0);
+  assert.equal(marker.n, 0);
+  assert.equal((await call(env, "/api/setup/status")).body.claimable, true);
+  failSessions = false;
+  const retry = await call(env, "/api/setup", post());
+  assert.equal(retry.res.status, 200);
+  assert.match(retry.body.recoveryKey, /^mi_[0-9a-f]{48}$/);
+  console.log("  ✅ a failed claim leaves no marker and the retry succeeds");
+}
+
+{
+  // Once ADMIN_KEY is configured, it supersedes a previously issued recovery key.
+  const env = makeEnv({ SETUP_CLAIM_UNTIL: new Date(Date.now() + 60_000).toISOString() });
+  const claim = await call(env, "/api/setup", post());
+  env.ADMIN_KEY = "admin-key-abcdefghijklmnopqrstuvwxyz";
+  assert.equal((await call(env, "/api/setup", post({ "x-admin-key": claim.body.recoveryKey }))).res.status, 401);
+  assert.equal((await call(env, "/api/setup", post({ "x-admin-key": env.ADMIN_KEY }))).res.status, 200);
+  console.log("  ✅ ADMIN_KEY revokes the recovery key");
+}

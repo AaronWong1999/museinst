@@ -528,6 +528,15 @@ export class BrowserWorker extends Agent<Env, Record<string, never>> {
         .toArray() as any[];
       return Response.json({ revisions: rows });
     }
+    if (url.pathname === "/wipe" && req.method === "POST") {
+      for (const row of this.ctx.storage.sql.exec(`SELECT task_id FROM sessions`).toArray() as Array<{ task_id: string }>) {
+        await this.revokeLiveViewers(row.task_id, { closeSession: true }).catch(() => {});
+      }
+      for (const t of ["sessions", "task_state", "used_vault_items", "task_goal_revisions", "control_leases"]) {
+        this.ctx.storage.sql.exec(`DELETE FROM ${t}`);
+      }
+      return Response.json({ ok: true });
+    }
     if (url.pathname === "/healthz") {
       return Response.json({ ok: true });
     }

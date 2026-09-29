@@ -2,6 +2,17 @@ import type { Env } from "./env";
 
 export function wipeWorkspaceStatements(env: Env, workspaceId: string, userId?: string) {
   return [
+    // Telegram inbox/outbox rows carry the chat id, not the workspace; a private
+    // chat id equals the bound Telegram user id. These run before identities go.
+    env.DB.prepare(
+      `DELETE FROM channel_outbox WHERE channel='telegram' AND destination_id IN (SELECT external_id FROM channel_identities WHERE workspace_id=? AND channel='telegram')`,
+    ).bind(workspaceId),
+    env.DB.prepare(
+      `DELETE FROM channel_inbox WHERE channel='telegram' AND CAST(COALESCE(
+         json_extract(payload_json, '$.message.chat.id'),
+         json_extract(payload_json, '$.edited_message.chat.id'),
+         json_extract(payload_json, '$.callback_query.message.chat.id')) AS TEXT) IN (SELECT external_id FROM channel_identities WHERE workspace_id=? AND channel='telegram')`,
+    ).bind(workspaceId),
     env.DB.prepare(`DELETE FROM channel_identities WHERE workspace_id=?`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM sessions WHERE workspace_id=?`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM unbind_cooldowns WHERE workspace_id=?`).bind(workspaceId),
@@ -13,8 +24,6 @@ export function wipeWorkspaceStatements(env: Env, workspaceId: string, userId?: 
     env.DB.prepare(`DELETE FROM imap_send_idempotency WHERE workspace_id=?`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM vault_items WHERE workspace_id=?`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM encrypted_secrets WHERE workspace_id=?`).bind(workspaceId),
-    env.DB.prepare(`DELETE FROM channel_inbox WHERE workspace_id=?`).bind(workspaceId),
-    env.DB.prepare(`DELETE FROM channel_outbox WHERE workspace_id=?`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM email_outbox WHERE workspace_id=?`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM email_messages WHERE workspace_id=?`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM email_contacts WHERE workspace_id=?`).bind(workspaceId),
@@ -31,6 +40,20 @@ export function wipeWorkspaceStatements(env: Env, workspaceId: string, userId?: 
     env.DB.prepare(`DELETE FROM a2a_seq_reservations WHERE workspace_id=?`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM a2a_domain_consents WHERE workspace_id=?`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM a2a_optouts WHERE workspace_id=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM task_goal_revisions WHERE task_id IN (SELECT id FROM tasks WHERE workspace_id=?)`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM browser_sessions WHERE workspace_id=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM browser_access_grants WHERE workspace_id=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM browser_control_leases WHERE workspace_id=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM goal_milestones WHERE goal_id IN (SELECT id FROM goals WHERE workspace_id=?)`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM goals WHERE workspace_id=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM ideas WHERE workspace_id=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM a2a_outbound_intents WHERE workspace_id=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM a2a_outbound_commit_asserts WHERE workspace_id=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM email_owner_notifications WHERE workspace_id=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM email_model_admissions WHERE workspace_id=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM artifacts WHERE workspace_id=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM recipes WHERE author_workspace=?`).bind(workspaceId),
+    env.DB.prepare(`DELETE FROM wechat_bots WHERE workspace_id=?`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM task_receipts WHERE task_id IN (SELECT id FROM tasks WHERE workspace_id=?)`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM task_evidence WHERE task_id IN (SELECT id FROM tasks WHERE workspace_id=?)`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM task_steps WHERE task_id IN (SELECT id FROM tasks WHERE workspace_id=?)`).bind(workspaceId),
@@ -46,7 +69,31 @@ export function wipeWorkspaceStatements(env: Env, workspaceId: string, userId?: 
     env.DB.prepare(`DELETE FROM wechat_outbox WHERE workspace_id=?`).bind(workspaceId),
     env.DB.prepare(`DELETE FROM workspaces WHERE id=?`).bind(workspaceId),
     ...(userId ? [env.DB.prepare(`DELETE FROM users WHERE id=?`).bind(userId)] : []),
+    // When the last workspace is gone, release the self-host claim so the next
+    // owner starts clean instead of inheriting the previous claim lock.
+    env.DB.prepare(
+      `DELETE FROM settings WHERE workspace_id='__global' AND key IN ('owner_claimed_at', 'owner_recovery_key_sha256')
+         AND NOT EXISTS (SELECT 1 FROM workspaces)`,
+    ),
   ];
+}
+
+/** Clears Durable Object state that D1 deletes cannot reach: WeChat poller tokens and the browser worker. */
+export async function wipeWorkspaceDurableState(env: Env, workspaceId: string): Promise<void> {
+  const bots = await env.DB.prepare(`SELECT id FROM wechat_bots WHERE workspace_id=?`)
+    .bind(workspaceId).all<{ id: string }>();
+  if (env.WECHAT_POLLER) {
+    for (const bot of bots.results ?? []) {
+      const stub = env.WECHAT_POLLER.get(env.WECHAT_POLLER.idFromName(bot.id));
+      const res = await stub.fetch("https://poller/unregister", { method: "POST" });
+      if (!res.ok) throw new Error(`wechat_poller_unregister_http_${res.status}`);
+    }
+  }
+  if (env.BROWSER_WORKER) {
+    const stub = env.BROWSER_WORKER.get(env.BROWSER_WORKER.idFromName(workspaceId));
+    const res = await stub.fetch("https://browser/wipe", { method: "POST" });
+    if (!res.ok) throw new Error(`browser_worker_wipe_http_${res.status}`);
+  }
 }
 
 async function deletePrefix(bucket: R2Bucket, prefix: string): Promise<void> {
