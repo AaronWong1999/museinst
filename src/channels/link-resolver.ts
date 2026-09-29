@@ -17,7 +17,7 @@ export interface LinkResolver {
 }
 
 export interface LinkResolverHost {
-  /** Deployment base URL, e.g. https://openinst.com (no trailing slash). */
+  /** Deployment base URL, e.g. https://museinst.com (no trailing slash). */
   baseUrl: string;
 }
 

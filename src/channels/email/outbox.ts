@@ -69,7 +69,7 @@ export interface EnqueueOpts {
 }
 
 export function getOutboundMessageId(fromAddr: string): string {
-  const domain = String(fromAddr ?? "").split("@")[1] ?? "openinst.com";
+  const domain = String(fromAddr ?? "").split("@")[1] ?? "museinst.com";
   return `<${newId("msg").replace(/^msg_/, "")}.${Date.now().toString(36)}@${domain}>`;
 }
 
