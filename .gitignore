@@ -32,3 +32,13 @@ build/
 
 # Local proof-of-concept browser profiles
 poc/**/.chrome-profile*
+
+# Dependencies and build caches: never commit
+.next/
+.vite/
+.turbo/
+.cache/
+.pytest_cache/
+venv/
+playwright-report/
+test-results/
