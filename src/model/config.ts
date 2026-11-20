@@ -20,8 +20,8 @@ export interface CloudflareModelPreset {
 
 export const CLOUDFLARE_PRESETS: CloudflareModelPreset[] = [
   {
-    id: "@cf/zai-org/glm-5.3-flash",
-    name: "GLM 5.3 Flash",
+    id: "@cf/deepseek-ai/deepseek-v4.1-flash-1017",
+    name: "DeepSeek V4.1 Flash 1017",
     provider: "workers-ai",
     badge: "推荐",
     description: "超长上下文 · 强悍的工具调用与中文理解",
@@ -44,8 +44,8 @@ export const CLOUDFLARE_PRESETS: CloudflareModelPreset[] = [
 
 export const DEFAULT_MODEL_CONFIG: CustomModelConfig = {
   provider: "workers-ai",
-  model: "@cf/zai-org/glm-5.3-flash",
-  name: "GLM 5.3 Flash (Workers AI)",
+  model: "@cf/deepseek-ai/deepseek-v4.1-flash-1017",
+  name: "DeepSeek V4.1 Flash 1017 (Workers AI)",
   limitsMode: "auto",
   enableTools: true,
 };
@@ -130,7 +130,9 @@ export async function getWorkspaceModelConfig(env: Env, workspaceId: string): Pr
         const limitsMode: "auto" | "manual" = parsed.limitsMode === "manual" ? "manual" : "auto";
         return {
           provider: parsed.provider === "custom" ? "custom" : "workers-ai",
-          model: typeof parsed.model === "string" && parsed.model ? parsed.model : DEFAULT_MODEL_CONFIG.model,
+          model: typeof parsed.model === "string" && parsed.model &&
+            !(parsed.provider !== "custom" && parsed.model === "@cf/zai-org/glm-5.3-flash")
+            ? parsed.model : DEFAULT_MODEL_CONFIG.model,
           name: typeof parsed.name === "string" ? parsed.name : undefined,
           baseUrl: typeof parsed.baseUrl === "string" ? parsed.baseUrl : undefined,
           apiKey,

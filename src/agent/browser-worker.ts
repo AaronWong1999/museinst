@@ -86,7 +86,7 @@ export interface WorkerOutcome {
   /** Set when the loop halted on a stale control_epoch / user_active state. */
   staleControlEpoch?: boolean;
 
-  usage?: { input?: number; output?: number; browserMs?: number };
+  usage?: { input?: number; output?: number; cachedInput?: number; browserMs?: number; model?: string };
   evidence?: Array<{ type: string; value: string }>;
 }
 
@@ -709,7 +709,7 @@ export class BrowserWorker extends Agent<Env, Record<string, never>> {
     // §13/§25.7 — publish the real browser session to D1 so the Computer →
     // Browser tab shows it even without any handoff grant (DEFECT-022).
     this.publishSessionStart(p, { freshRun: !resume });
-    const usage: { input?: number; output?: number; browserMs?: number } = { input: 0, output: 0, browserMs: 0 };
+    const usage: { input?: number; output?: number; cachedInput?: number; browserMs?: number; model?: string } = { input: 0, output: 0, browserMs: 0 };
     const withUsage = <T extends WorkerOutcome>(o: T): T => {
 
       const scrubResult = (res: unknown): unknown => {
@@ -954,6 +954,8 @@ export class BrowserWorker extends Agent<Env, Record<string, never>> {
         if (result.usage) {
           usage.input = (usage.input ?? 0) + result.usage.input;
           usage.output = (usage.output ?? 0) + result.usage.output;
+          usage.cachedInput = (usage.cachedInput ?? 0) + (result.usage.cachedInput || 0);
+          if (result.usage.model) usage.model = result.usage.model;
         }
 
         if (result.toolCalls.length === 0) {

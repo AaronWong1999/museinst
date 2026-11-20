@@ -39,7 +39,7 @@ export interface ToolDef {
 export interface ModelResult {
   text: string;
   toolCalls: ToolCall[];
-  usage?: { input: number; output: number };
+  usage?: { input: number; output: number; cachedInput?: number; model?: string };
 }
 
 /**
@@ -234,8 +234,8 @@ async function callWorkersAI(
     // Auto mode deliberately omits max_tokens. The selected model/provider owns the limit.
     ...(opts.maxTokens !== undefined ? { max_tokens: opts.maxTokens } : {}),
     ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
-
-
+    // Tool turns replay OpenAI-style messages without provider-specific reasoning history.
+    ...(model === "@cf/deepseek-ai/deepseek-v4.1-flash-1017" ? { chat_template_kwargs: { thinking: false } } : {}),
     ...(opts.tools?.length
       ? { tools: opts.tools.map((t) => ({ type: "function", function: t })), tool_choice: "auto" }
       : {}),
@@ -243,10 +243,10 @@ async function callWorkersAI(
 
   const resp = await (env.AI as any).run(model, body);
   assertWorkersAiBodyOk(resp);
-  return normalizeWorkersAI(resp);
+  return normalizeWorkersAI(resp, model);
 }
 
-function normalizeWorkersAI(resp: any): ModelResult {
+function normalizeWorkersAI(resp: any, model: string): ModelResult {
 
 
   const text: string =
@@ -270,6 +270,8 @@ function normalizeWorkersAI(resp: any): ModelResult {
     ? {
         input: Number(resp.usage.prompt_tokens ?? 0),
         output: Number(resp.usage.completion_tokens ?? 0),
+        cachedInput: Number(resp.usage.prompt_tokens_details?.cached_tokens ?? 0),
+        model,
       }
     : undefined;
   return { text, toolCalls, usage };

@@ -313,16 +313,22 @@ export class PersonalAgent extends Agent<Env, AgentState> {
 
 
 
-  private addUsage(u?: { input?: number; output?: number; browserMs?: number }, opts: { browser?: boolean } = {}): void {
+  private addUsage(u?: { input?: number; output?: number; cachedInput?: number; browserMs?: number; model?: string }, opts: { browser?: boolean } = {}): void {
     if (!u) return;
     const inTok = u.input ?? 0;
     const outTok = u.output ?? 0;
     this.turnUsage.tokensIn += inTok;
     this.turnUsage.tokensOut += outTok;
+    const cached = Math.min(inTok, Math.max(0, u.cachedInput || 0));
+    this.turnUsage.cachedTokensIn = (this.turnUsage.cachedTokensIn ?? 0) + cached;
     this.turnUsage.browserMs += u.browserMs ?? 0;
     if (opts.browser) {
       this.turnUsage.browserTokensIn = (this.turnUsage.browserTokensIn ?? 0) + inTok;
       this.turnUsage.browserTokensOut = (this.turnUsage.browserTokensOut ?? 0) + outTok;
+      this.turnUsage.browserCachedTokensIn = (this.turnUsage.browserCachedTokensIn ?? 0) + cached;
+      if (u.model) this.turnUsage.browserModel = u.model;
+    } else if (u.model) {
+      this.turnUsage.model = u.model;
     }
   }
 
@@ -2241,7 +2247,7 @@ export class PersonalAgent extends Agent<Env, AgentState> {
         return { replies: [lang === "zh" ? `没能完成。模型调用失败，稍后再试一次。\ntrace: ${taskId.slice(-6)}` : `Couldn't finish. Model call failed — please retry.\ntrace: ${taskId.slice(-6)}`], taskId };
       }
       if (result.usage) {
-        this.addUsage({ input: result.usage.input, output: result.usage.output });
+        this.addUsage(result.usage);
         this.recordUsage(result.usage);
       }
 
@@ -4001,7 +4007,7 @@ export class PersonalAgent extends Agent<Env, AgentState> {
         return [lang === "zh" ? "继续处理时模型调用失败。" : "Model call failed while resuming."];
       }
       if (result.usage) {
-        this.addUsage({ input: result.usage.input, output: result.usage.output });
+        this.addUsage(result.usage);
         this.recordUsage(result.usage);
       }
       if (result.toolCalls.length === 0) {

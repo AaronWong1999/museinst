@@ -14,13 +14,13 @@ interface Props {
 
 const SELF_TIERS: Array<[string, string, string]> = [
   ["试一试、自己玩", "Cloudflare 免费账号，零外部 key", "@cf/google/gemma-4-26b-a4b-it"],
-  ["日常认真用", "Cloudflare Workers Paid（$5/月）", "@cf/zai-org/glm-5.3-flash"],
+  ["日常认真用", "Cloudflare Workers Paid（$5/月）", "@cf/deepseek-ai/deepseek-v4.1-flash-1017"],
   ["用自己的模型", "任意 OpenAI 兼容端点", "智谱 / DeepSeek / OpenRouter / 本地"],
 ];
 
 const SELF_TIERS_EN: Array<[string, string, string]> = [
   ["Try it out", "Cloudflare free account, zero external keys", "@cf/google/gemma-4-26b-a4b-it"],
-  ["Daily serious use", "Cloudflare Workers Paid ($5/mo)", "@cf/zai-org/glm-5.3-flash"],
+  ["Daily serious use", "Cloudflare Workers Paid ($5/mo)", "@cf/deepseek-ai/deepseek-v4.1-flash-1017"],
   ["Your own model", "Any OpenAI-compatible endpoint", "Zhipu / DeepSeek / OpenRouter / local"],
 ];
 

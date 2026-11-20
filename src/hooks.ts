@@ -29,6 +29,10 @@ export interface UsageRecord {
 
   browserTokensIn?: number;
   browserTokensOut?: number;
+  cachedTokensIn?: number;
+  browserCachedTokensIn?: number;
+  model?: string;
+  browserModel?: string;
 }
 
 export interface UsageContext {

@@ -1222,7 +1222,9 @@ coreApiApp.post("/api/model/config", async (c) => {
 
   let next: CustomModelConfig;
   if (body.provider === "workers-ai") {
-    const model = body.model?.trim() || c.env.MODEL_ROOT || "@cf/zai-org/glm-5.3-flash";
+    const requestedModel = body.model?.trim() || c.env.MODEL_ROOT;
+    const model = !requestedModel || requestedModel === "@cf/zai-org/glm-5.3-flash"
+      ? "@cf/deepseek-ai/deepseek-v4.1-flash-1017" : requestedModel;
     const preset = CLOUDFLARE_PRESETS.find((item) => item.id === model);
     next = {
       provider: "workers-ai",
